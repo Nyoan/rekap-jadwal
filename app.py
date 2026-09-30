@@ -10,8 +10,8 @@ st.write("Tempelkan data jadwal harian Anda di bawah ini untuk mendapatkan rinci
 # Input Teks
 user_input = st.text_area(
     "Masukkan Data Jadwal:",
-    height=250,
-    placeholder="Contoh:\nTgl 1 sept 26\n[name] ,[name] ,[name] \n[name]\n\nTgl 2 Sept 26\n[name],[name]"
+    height=300,
+    placeholder="Contoh:\nTgl 1 sept 26\nRachel, lusi, cing2, agatha (ding2)\nKen, kimmy\n\nTotal\n23 x 120rb = 2.760.000\nTotal = 4.260.000"
 )
 
 def parse_schedule(text):
@@ -24,13 +24,20 @@ def parse_schedule(text):
         if not line:
             continue
             
-        # Cek apakah baris merupakan tanggal
+        # 1. Cek apakah baris merupakan tanggal
         if re.match(r'^(tgl|tanggal)\b', line, re.IGNORECASE):
             current_date = line
             if current_date not in data:
                 data[current_date] = []
+        
+        # 2. Cek dan Abaikan teks ringkasan/total di akhir data
+        elif re.match(r'^(total|\d+\s*x|rp\b)', line, re.IGNORECASE) or '=' in line:
+            # Menghentikan pencatatan sesi untuk baris ringkasan total manual
+            current_date = None
+            continue
+            
+        # 3. Ambil data nama peserta jika sedang berada di bawah tanggal tertentu
         elif current_date:
-            # Hitung jumlah peserta berdasarkan koma
             names = [name.strip() for name in line.split(',') if name.strip()]
             if names:
                 data[current_date].append(names)
@@ -68,49 +75,46 @@ if st.button("Proses Review", type="primary"):
         # --- 1. Ringkasan Tabel ---
         st.subheader("📊 Ringkasan Rekapitulasi")
         
-        df = pd.DataFrame(table_rows)
-        
-        # Hitung Total Keseluruhan
-        grand_total_income = (total_priv_all * 100000) + (total_non_priv_all * 120000)
-        
-        # Baris Total Bawah
-        total_row = pd.DataFrame([{
-            "Tanggal": "TOTAL KESELURUHAN",
-            "Sesi Private": f"{total_priv_all} sesi (Rp {total_priv_all * 100000:,.0f})".replace(",", "."),
-            "Sesi Non-Private": f"{total_non_priv_all} sesi (Rp {total_non_priv_all * 120000:,.0f})".replace(",", "."),
-            "Total Pendapatan Harian": f"Rp {grand_total_income:,.0f}".replace(",", ".")
-        }])
-        
-        df_final = pd.concat([df, total_row], ignore_index=True)
-        
-        # Tampilkan tabel di Streamlit
-        st.dataframe(df_final, use_container_width=True, hide_index=True)
+        if table_rows:
+            df = pd.DataFrame(table_rows)
+            
+            grand_total_income = (total_priv_all * 100000) + (total_non_priv_all * 120000)
+            
+            total_row = pd.DataFrame([{
+                "Tanggal": "TOTAL KESELURUHAN",
+                "Sesi Private": f"{total_priv_all} sesi (Rp {total_priv_all * 100000:,.0f})".replace(",", "."),
+                "Sesi Non-Private": f"{total_non_priv_all} sesi (Rp {total_non_priv_all * 120000:,.0f})".replace(",", "."),
+                "Total Pendapatan Harian": f"Rp {grand_total_income:,.0f}".replace(",", ".")
+            }])
+            
+            df_final = pd.concat([df, total_row], ignore_index=True)
+            st.dataframe(df_final, use_container_width=True, hide_index=True)
 
-        st.markdown("---")
-        
-        # --- 2. Rincian Per Tanggal (Detail Sesi & Nama) ---
-        st.subheader("📝 Detail Peserta Per Tanggal")
-        
-        for date, sessions in parsed_data.items():
-            st.markdown(f"#### **{date}**")
+            st.markdown("---")
             
-            priv_sessions = [s for s in sessions if len(s) <= 2]
-            non_priv_sessions = [s for s in sessions if len(s) > 2]
+            # --- 2. Rincian Per Tanggal ---
+            st.subheader("📝 Detail Peserta Per Tanggal")
             
-            # Detail Private
-            if priv_sessions:
-                st.markdown(f"* **Private** ({len(priv_sessions)} sesi):")
-                for idx, s in enumerate(priv_sessions, 1):
-                    st.markdown(f"  * Sesi {idx}: {', '.join(s)}")
-            else:
-                st.markdown("* **Private**: Tidak ada")
+            for date, sessions in parsed_data.items():
+                st.markdown(f"#### **{date}**")
                 
-            # Detail Non-Private
-            if non_priv_sessions:
-                st.markdown(f"* **Non-Private** ({len(non_priv_sessions)} sesi):")
-                for idx, s in enumerate(non_priv_sessions, 1):
-                    st.markdown(f"  * Sesi {idx}: {', '.join(s)}")
-            else:
-                st.markdown("* **Non-Private**: Tidak ada")
+                priv_sessions = [s for s in sessions if len(s) <= 2]
+                non_priv_sessions = [s for s in sessions if len(s) > 2]
                 
-            st.write("")
+                if priv_sessions:
+                    st.markdown(f"* **Private** ({len(priv_sessions)} sesi):")
+                    for idx, s in enumerate(priv_sessions, 1):
+                        st.markdown(f"  * Sesi {idx}: {', '.join(s)}")
+                else:
+                    st.markdown("* **Private**: Tidak ada")
+                    
+                if non_priv_sessions:
+                    st.markdown(f"* **Non-Private** ({len(non_priv_sessions)} sesi):")
+                    for idx, s in enumerate(non_priv_sessions, 1):
+                        st.markdown(f"  * Sesi {idx}: {', '.join(s)}")
+                else:
+                    st.markdown("* **Non-Private**: Tidak ada")
+                    
+                st.write("")
+        else:
+            st.error("Format data tidak terdeteksi. Pastikan ada penulisan tanggal seperti 'Tgl ...'")
