@@ -1,4 +1,5 @@
 import re
+import pandas as pd
 import streamlit as st
 
 st.set_page_config(page_title="Rekap Jadwal & Tarif", page_icon="📅", layout="wide")
@@ -9,8 +10,8 @@ st.write("Tempelkan data jadwal harian Anda di bawah ini untuk mendapatkan rinci
 # Input Teks
 user_input = st.text_area(
     "Masukkan Data Jadwal:",
-    height=300,
-    placeholder="Contoh:\nTgl 1 sept 26\n[nama], [nama], [nama], [nama]\n[nama], [nama]\n\nTgl 2 Sept 26\n[nama]"
+    height=250,
+    placeholder="Contoh:\nTgl 1 sept 26\n[name] ,[name] ,[name] \n[name]\n\nTgl 2 Sept 26\n[name],[name]"
 )
 
 def parse_schedule(text):
@@ -42,50 +43,53 @@ if st.button("Proses Review", type="primary"):
     else:
         parsed_data = parse_schedule(user_input)
         
-        private_dates = {}
-        non_private_dates = {}
-        
-        total_private_sessions = 0
-        total_non_private_sessions = 0
+        table_rows = []
+        total_priv_all = 0
+        total_non_priv_all = 0
         
         for date, sessions in parsed_data.items():
-            for names in sessions:
-                count = len(names)
-                names_str = ", ".join(names)
-                
-                if count <= 2:
-                    total_private_sessions += 1
-                    if date not in private_dates:
-                        private_dates[date] = []
-                    private_dates[date].append(names_str)
-                else:
-                    total_non_private_sessions += 1
-                    if date not in non_private_dates:
-                        non_private_dates[date] = []
-                    non_private_dates[date].append(names_str)
+            priv_count = sum(1 for s in sessions if len(s) <= 2)
+            non_priv_count = sum(1 for s in sessions if len(s) > 2)
+            
+            daily_total = (priv_count * 100000) + (non_priv_count * 120000)
+            
+            total_priv_all += priv_count
+            total_non_priv_all += non_priv_count
+            
+            table_rows.append({
+                "Tanggal": date,
+                "Sesi Private": f"{priv_count} sesi",
+                "Sesi Non-Private": f"{non_priv_count} sesi",
+                "Total Pendapatan Harian": f"Rp {daily_total:,.0f}".replace(",", ".")
+            })
 
         st.markdown("---")
         
-        # --- 1. Daftar Tanggal Sesi Private ---
-        st.subheader("Daftar Tanggal Sesi Private")
-        if private_dates:
-            for date, groups in private_dates.items():
-                st.markdown(f"- **{date}**: {' | '.join(groups)}")
-        else:
-            st.write("Tidak ada sesi Private.")
-
-        # --- 2. Daftar Tanggal Sesi Non-Private ---
-        st.subheader("Daftar Tanggal Sesi Non-Private")
-        if non_private_dates:
-            for date, groups in non_private_dates.items():
-                st.markdown(f"- **{date}**: {' | '.join(groups)}")
-        else:
-            st.write("Tidak ada sesi Non-Private.")
+        # --- 1. Ringkasan Tabel ---
+        st.subheader("📊 Ringkasan Rekapitulasi")
+        
+        df = pd.DataFrame(table_rows)
+        
+        # Hitung Total Keseluruhan
+        grand_total_income = (total_priv_all * 100000) + (total_non_priv_all * 120000)
+        
+        # Baris Total Bawah
+        total_row = pd.DataFrame([{
+            "Tanggal": "TOTAL KESELURUHAN",
+            "Sesi Private": f"{total_priv_all} sesi (Rp {total_priv_all * 100000:,.0f})".replace(",", "."),
+            "Sesi Non-Private": f"{total_non_priv_all} sesi (Rp {total_non_priv_all * 120000:,.0f})".replace(",", "."),
+            "Total Pendapatan Harian": f"Rp {grand_total_income:,.0f}".replace(",", ".")
+        }])
+        
+        df_final = pd.concat([df, total_row], ignore_index=True)
+        
+        # Tampilkan tabel di Streamlit
+        st.dataframe(df_final, use_container_width=True, hide_index=True)
 
         st.markdown("---")
         
-        # --- 3. Rincian Per Tanggal ---
-        st.subheader("Rincian Per Tanggal (Detail Sesi & Nama)")
+        # --- 2. Rincian Per Tanggal (Detail Sesi & Nama) ---
+        st.subheader("📝 Detail Peserta Per Tanggal")
         
         for date, sessions in parsed_data.items():
             st.markdown(f"#### **{date}**")
@@ -93,43 +97,20 @@ if st.button("Proses Review", type="primary"):
             priv_sessions = [s for s in sessions if len(s) <= 2]
             non_priv_sessions = [s for s in sessions if len(s) > 2]
             
-            # Private Detail
+            # Detail Private
             if priv_sessions:
-                total_priv_students = sum(len(s) for s in priv_sessions)
-                st.markdown(f"* **Private** ({len(priv_sessions)} sesi, {total_priv_students} murid):")
-                if len(priv_sessions) == 1:
-                    st.markdown(f"  * {', '.join(priv_sessions[0])}")
-                else:
-                    for idx, s in enumerate(priv_sessions, 1):
-                        st.markdown(f"  * Sesi {idx}: {', '.join(s)}")
+                st.markdown(f"* **Private** ({len(priv_sessions)} sesi):")
+                for idx, s in enumerate(priv_sessions, 1):
+                    st.markdown(f"  * Sesi {idx}: {', '.join(s)}")
             else:
                 st.markdown("* **Private**: Tidak ada")
                 
-            # Non-Private Detail
+            # Detail Non-Private
             if non_priv_sessions:
-                total_non_priv_students = sum(len(s) for s in non_priv_sessions)
-                st.markdown(f"* **Non-Private** ({len(non_priv_sessions)} sesi, {total_non_priv_students} murid):")
-                if len(non_priv_sessions) == 1:
-                    st.markdown(f"  * {', '.join(non_priv_sessions[0])}")
-                else:
-                    for idx, s in enumerate(non_priv_sessions, 1):
-                        st.markdown(f"  * Sesi {idx}: {', '.join(s)}")
+                st.markdown(f"* **Non-Private** ({len(non_priv_sessions)} sesi):")
+                for idx, s in enumerate(non_priv_sessions, 1):
+                    st.markdown(f"  * Sesi {idx}: {', '.join(s)}")
             else:
                 st.markdown("* **Non-Private**: Tidak ada")
                 
-            daily_total = (len(priv_sessions) * 100000) + (len(non_priv_sessions) * 120000)
-            st.markdown(f"* **Total Pendapatan**: Rp {daily_total:,.0f}".replace(",", "."))
             st.write("")
-
-        st.markdown("---")
-        
-        # --- 4. Rekap Total Pendapatan Akhir ---
-        st.subheader("Rekap Total Pendapatan Akhir")
-        
-        tot_priv_income = total_private_sessions * 100000
-        tot_non_priv_income = total_non_private_sessions * 120000
-        grand_total = tot_priv_income + tot_non_priv_income
-        
-        st.write(f"* **Total Sesi Private**: {total_private_sessions} sesi × Rp 100.000 = **Rp {tot_priv_income:,.0f}**".replace(",", "."))
-        st.write(f"* **Total Sesi Non-Private**: {total_non_private_sessions} sesi × Rp 120.000 = **Rp {tot_non_priv_income:,.0f}**".replace(",", "."))
-        st.markdown(f"### **Total Keseluruhan Pendapatan: Rp {grand_total:,.0f}**".replace(",", "."))
