@@ -10,7 +10,7 @@ st.write("Tempelkan data jadwal harian Anda di bawah ini untuk mendapatkan rinci
 user_input = st.text_area(
     "Masukkan Data Jadwal:",
     height=300,
-    placeholder="Contoh:\nTgl 1 sept 26\nRachel, lusi, cing2, agatha (ding2)\nKen, kimmy\n\nTgl 2 Sept 26\nObaja"
+    placeholder="Contoh:\nTgl 1 sept 26\[nama], [nama], [nama], [nama]\n[nama], [nama]\n\nTgl 2 Sept 26\n[nama]"
 )
 
 def parse_schedule(text):
